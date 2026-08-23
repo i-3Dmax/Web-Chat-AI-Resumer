@@ -644,12 +644,6 @@
       'margin-bottom:12px;' +
       'font-weight:bold;';
 
-    var copyMessagesButton = makeButton(
-      'Копировать сообщения',
-      '#4a76a8',
-      '📋'
-    );
-
     var allEventsButton = createModeButton(
       'Все события',
       '#4a76a8',
@@ -662,12 +656,18 @@
       '⭐'
     );
 
+    var copyMessagesButton = makeButton(
+      'Копировать сообщения',
+      '#e67e22',
+      '📋'
+    );
+
     var closeButton = makeButton('Закрыть', '#777', '×');
 
     menu.appendChild(title);
-    menu.appendChild(copyMessagesButton);
     menu.appendChild(allEventsButton);
     menu.appendChild(importantButton);
+    menu.appendChild(copyMessagesButton);
     menu.appendChild(closeButton);
     document.body.appendChild(menu);
 
