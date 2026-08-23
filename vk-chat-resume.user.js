@@ -647,7 +647,7 @@
     var allEventsButton = createModeButton(
       'Все события',
       '#4a76a8',
-      '📋'
+      '💯'
     );
 
     var importantButton = createModeButton(
