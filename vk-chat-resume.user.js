@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         VK chat AI-resumer
 // @namespace    vk-chat-resume
-// @version      2.9.0
+// @version      2.10.0
 // @updateURL    https://raw.githubusercontent.com/i-3Dmax/vk.ru-chat-resume/main/vk-chat-resume.user.js
 // @downloadURL  https://raw.githubusercontent.com/i-3Dmax/vk.ru-chat-resume/main/vk-chat-resume.user.js
 // @description  Экспорт сообщений VK и резюме через Qwen/DeepSeek
@@ -1536,7 +1536,8 @@
     area.scrollTop = 0;
 
     copyButton.addEventListener('click', function() {
-      copyText(area.value)
+      var fullText = title.textContent + '\n\n' + area.value;
+      copyText(fullText)
         .then(function() {
           setButtonText(copyButton, 'Результат скопирован');
         })
