@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         VK chat AI-resumer
 // @namespace    vk-chat-resume
-// @version      2.5.0
+// @version      2.5.1
 // @updateURL    https://raw.githubusercontent.com/i-3Dmax/vk.ru-chat-resume/main/vk-chat-resume.user.js
 // @downloadURL  https://raw.githubusercontent.com/i-3Dmax/vk.ru-chat-resume/main/vk-chat-resume.user.js
 // @description  Экспорт сообщений VK и резюме через Qwen/DeepSeek
@@ -39,7 +39,7 @@
     openrouter: {
       name: 'OpenRouter (бесплатно)',
       url: 'https://openrouter.ai/api/v1/chat/completions',
-      model: 'meta-llama/llama-3-8b-instruct:free',
+      model: 'dots-studio/dots3-note-preview:free',
       cookieKey: 'vk-exporter-openrouter-api-key'
     }
   };
