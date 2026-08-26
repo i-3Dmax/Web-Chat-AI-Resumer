@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         VK chat AI-resumer
 // @namespace    vk-chat-resume
-// @version      2.4.0
+// @version      2.5.0
 // @updateURL    https://raw.githubusercontent.com/i-3Dmax/vk.ru-chat-resume/main/vk-chat-resume.user.js
 // @downloadURL  https://raw.githubusercontent.com/i-3Dmax/vk.ru-chat-resume/main/vk-chat-resume.user.js
 // @description  Экспорт сообщений VK и резюме через Qwen/DeepSeek
@@ -14,6 +14,7 @@
 // @connect      dashscope-intl.aliyuncs.com
 // @connect      dashscope.aliyuncs.com
 // @connect      api.deepseek.com
+// @connect      openrouter.ai
 // @run-at       document-idle
 // @license      MIT
 // @noframes
@@ -34,6 +35,12 @@
       url: 'https://api.deepseek.com/v1/chat/completions',
       model: 'deepseek-chat',
       cookieKey: 'vk-exporter-deepseek-api-key'
+    },
+    openrouter: {
+      name: 'OpenRouter (бесплатно)',
+      url: 'https://openrouter.ai/api/v1/chat/completions',
+      model: 'meta-llama/llama-3-8b-instruct:free',
+      cookieKey: 'vk-exporter-openrouter-api-key'
     }
   };
 
@@ -1143,14 +1150,21 @@
       }, QWEN_TIMEOUT);
 
       try {
+        var headers = {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + apiKey
+        };
+
+        if (provider === 'openrouter') {
+          headers['HTTP-Referer'] = 'https://vk.com';
+          headers['X-Title'] = 'VK Chat AI-resumer';
+        }
+
         GM.xmlHttpRequest({
           method: 'POST',
           url: providerConfig.url,
           timeout: QWEN_TIMEOUT,
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer ' + apiKey
-          },
+          headers: headers,
           data: JSON.stringify(body),
           onload: function(response) {
             if (settled) {
