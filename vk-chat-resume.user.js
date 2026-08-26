@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         VK chat AI-resumer
 // @namespace    vk-chat-resume
-// @version      2.6.0
+// @version      2.7.0
 // @updateURL    https://raw.githubusercontent.com/i-3Dmax/vk.ru-chat-resume/main/vk-chat-resume.user.js
 // @downloadURL  https://raw.githubusercontent.com/i-3Dmax/vk.ru-chat-resume/main/vk-chat-resume.user.js
 // @description  Экспорт сообщений VK и резюме через Qwen/DeepSeek
@@ -989,44 +989,62 @@
     promptTemplate,
     provider
   ) {
-    return makeSummary(
-      messagesText,
-      count,
-      apiKey,
-      promptTemplate,
-      provider
-    )
-      .then(function(summary) {
-        saveApiKeyCookie(provider, apiKey);
-        return summary;
-      })
-      .catch(function(error) {
-        if (!isQwenAuthError(error) || isQwenQuotaError(error)) {
-          throw error;
-        }
+    var MAX_SHORT_RETRIES = 2;
 
-        removeApiKeyCookie(provider);
+    function attempt(retriesLeft) {
+      return makeSummary(
+        messagesText,
+        count,
+        apiKey,
+        promptTemplate,
+        provider
+      )
+        .then(function(summary) {
+          saveApiKeyCookie(provider, apiKey);
 
-        var newApiKey = promptForApiKey(provider);
-
-        if (!newApiKey) {
-          throw new Error(
-            'Для повторной попытки нужен API-ключ ' + PROVIDERS[provider].name + '.'
-          );
-        }
-
-        return makeSummary(
-          messagesText,
-          count,
-          newApiKey,
-          promptTemplate,
-          provider
-        )
-          .then(function(summary) {
-            saveApiKeyCookie(provider, newApiKey);
-            return summary;
+          var lines = summary.split('\n').filter(function(l) {
+            return l.trim().length > 0;
           });
-      });
+
+          if (lines.length <= 2 && retriesLeft > 0) {
+            showStatus('Ответ слишком короткий, повтор...');
+            return attempt(retriesLeft - 1);
+          }
+
+          return summary;
+        })
+        .catch(function(error) {
+          if (!isQwenAuthError(error) || isQwenQuotaError(error)) {
+            throw error;
+          }
+
+          removeApiKeyCookie(provider);
+
+          var newApiKey = promptForApiKey(provider);
+
+          if (!newApiKey) {
+            throw new Error(
+              'Для повторной попытки нужен API-ключ ' + PROVIDERS[provider].name + '.'
+            );
+          }
+
+          apiKey = newApiKey;
+
+          return makeSummary(
+            messagesText,
+            count,
+            newApiKey,
+            promptTemplate,
+            provider
+          )
+            .then(function(summary) {
+              saveApiKeyCookie(provider, newApiKey);
+              return summary;
+            });
+        });
+    }
+
+    return attempt(MAX_SHORT_RETRIES);
   }
 
   function promptForApiKey(provider) {
@@ -1611,11 +1629,11 @@
 
   function addButton3dEffect(button) {
     var baseShadow =
-      '0 3px 0 rgba(0,0,0,.28),' +
-      '0 5px 8px rgba(0,0,0,.18);';
+      '0 2px 4px rgba(0,0,0,.15),' +
+      '0 1px 2px rgba(0,0,0,.1);';
     var hoverShadow =
-      '0 4px 0 rgba(0,0,0,.28),' +
-      '0 7px 12px rgba(0,0,0,.2);';
+      '0 3px 6px rgba(0,0,0,.2),' +
+      '0 2px 4px rgba(0,0,0,.12);';
 
     button.style.boxShadow = baseShadow;
     button.style.transition =
@@ -1627,8 +1645,8 @@
     });
 
     button.addEventListener('mousedown', function() {
-      button.style.transform = 'translateY(3px);';
-      button.style.boxShadow = '0 1px 0 rgba(0,0,0,.28);';
+      button.style.transform = 'translateY(1px);';
+      button.style.boxShadow = '0 1px 2px rgba(0,0,0,.1);';
     });
 
     button.addEventListener('mouseup', function() {
