@@ -1,10 +1,10 @@
 // ==UserScript==
 // @name         VK chat AI-resumer
 // @namespace    vk-chat-resume
-// @version      2.3.0
+// @version      2.4.0
 // @updateURL    https://raw.githubusercontent.com/i-3Dmax/vk.ru-chat-resume/main/vk-chat-resume.user.js
 // @downloadURL  https://raw.githubusercontent.com/i-3Dmax/vk.ru-chat-resume/main/vk-chat-resume.user.js
-// @description  Экспорт сообщений VK и резюме через Qwen Cloud
+// @description  Экспорт сообщений VK и резюме через Qwen/DeepSeek
 // @match        https://vk.ru/*
 // @match        https://vk.com/*
 // @grant        unsafeWindow
@@ -13,6 +13,7 @@
 // @grant        GM_registerMenuCommand
 // @connect      dashscope-intl.aliyuncs.com
 // @connect      dashscope.aliyuncs.com
+// @connect      api.deepseek.com
 // @run-at       document-idle
 // @license      MIT
 // @noframes
@@ -21,15 +22,26 @@
 (function() {
   'use strict';
 
-  var QWEN_URL =
-    'https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions';
+  var PROVIDERS = {
+    qwen: {
+      name: 'Qwen Cloud',
+      url: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions',
+      model: 'qwen-plus',
+      cookieKey: 'vk-exporter-qwen-api-key'
+    },
+    deepseek: {
+      name: 'DeepSeek',
+      url: 'https://api.deepseek.com/v1/chat/completions',
+      model: 'deepseek-chat',
+      cookieKey: 'vk-exporter-deepseek-api-key'
+    }
+  };
 
-  var QWEN_MODEL = 'qwen-plus';
+  var DEFAULT_PROVIDER = 'qwen';
   var MAX_CHARS = 60000;
   var VK_TIMEOUT = 30000;
   var QWEN_TIMEOUT = 120000;
   var BRIDGE_NAME = 'vk-exporter-bridge';
-  var API_KEY_COOKIE = 'vk-exporter-qwen-api-key';
   var PROMPT_TEMPLATES = {
     allEvents:
       'Выдели основные моменты в этой переписке с указанием ' +
@@ -644,6 +656,26 @@
       'margin-bottom:12px;' +
       'font-weight:bold;';
 
+    var providerLabel = document.createElement('label');
+    providerLabel.textContent = 'Провайдер AI:';
+    providerLabel.style.cssText =
+      'display:block;margin-top:0;font-weight:bold;';
+
+    var providerSelect = document.createElement('select');
+    providerSelect.style.cssText =
+      'display:block;width:100%;box-sizing:border-box;' +
+      'margin-top:6px;padding:9px;border:1px solid #ccd3da;' +
+      'border-radius:5px;font-size:14px;';
+
+    var providerKeys = Object.keys(PROVIDERS);
+    for (var i = 0; i < providerKeys.length; i++) {
+      var key = providerKeys[i];
+      var option = document.createElement('option');
+      option.value = key;
+      option.textContent = PROVIDERS[key].name;
+      providerSelect.appendChild(option);
+    }
+
     var allEventsButton = createModeButton(
       'Все события',
       '#4a76a8',
@@ -665,6 +697,8 @@
     var closeButton = makeButton('Закрыть', '#777', '×');
 
     menu.appendChild(title);
+    menu.appendChild(providerLabel);
+    menu.appendChild(providerSelect);
     menu.appendChild(allEventsButton);
     menu.appendChild(importantButton);
     menu.appendChild(copyMessagesButton);
@@ -685,22 +719,26 @@
     });
 
     allEventsButton.addEventListener('click', function() {
+      var provider = providerSelect.value;
       menu.remove();
       autoSummarize(
         messagesText,
         count,
         PROMPT_TEMPLATES.allEvents,
-        periodText
+        periodText,
+        provider
       );
     });
 
     importantButton.addEventListener('click', function() {
+      var provider = providerSelect.value;
       menu.remove();
       autoSummarize(
         messagesText,
         count,
         PROMPT_TEMPLATES.importantOnly,
-        periodText
+        periodText,
+        provider
       );
     });
 
@@ -754,15 +792,16 @@
     messagesText,
     count,
     promptTemplate,
-    periodText
+    periodText,
+    provider
   ) {
-    var apiKey = getApiKeyCookie();
+    var apiKey = getApiKeyCookie(provider);
 
     if (!apiKey) {
-      apiKey = promptForApiKey();
+      apiKey = promptForApiKey(provider);
 
       if (!apiKey) {
-        showMenu(messagesText, count, periodText);
+        showPromptMenu(messagesText, count, periodText);
         return;
       }
     }
@@ -775,7 +814,8 @@
       anonymized.text,
       count,
       apiKey.trim(),
-      promptTemplate
+      promptTemplate,
+      provider
     )
       .then(function(summary) {
         removeElement('vk-exporter-status');
@@ -932,16 +972,18 @@
     messagesText,
     count,
     apiKey,
-    promptTemplate
+    promptTemplate,
+    provider
   ) {
     return makeSummary(
       messagesText,
       count,
       apiKey,
-      promptTemplate
+      promptTemplate,
+      provider
     )
       .then(function(summary) {
-        saveApiKeyCookie(apiKey);
+        saveApiKeyCookie(provider, apiKey);
         return summary;
       })
       .catch(function(error) {
@@ -949,13 +991,13 @@
           throw error;
         }
 
-        removeApiKeyCookie();
+        removeApiKeyCookie(provider);
 
-        var newApiKey = promptForApiKey();
+        var newApiKey = promptForApiKey(provider);
 
         if (!newApiKey) {
           throw new Error(
-            'Для повторной попытки нужен API-ключ Qwen Cloud.'
+            'Для повторной попытки нужен API-ключ ' + PROVIDERS[provider].name + '.'
           );
         }
 
@@ -963,18 +1005,20 @@
           messagesText,
           count,
           newApiKey,
-          promptTemplate
+          promptTemplate,
+          provider
         )
           .then(function(summary) {
-            saveApiKeyCookie(newApiKey);
+            saveApiKeyCookie(provider, newApiKey);
             return summary;
           });
       });
   }
 
-  function promptForApiKey() {
+  function promptForApiKey(provider) {
+    var providerName = PROVIDERS[provider].name;
     var apiKey = prompt(
-      'Введите API-ключ Qwen Cloud:',
+      'Введите API-ключ ' + providerName + ':',
       ''
     );
 
@@ -983,8 +1027,9 @@
       : null;
   }
 
-  function getApiKeyCookie() {
-    var prefix = API_KEY_COOKIE + '=';
+  function getApiKeyCookie(provider) {
+    var key = PROVIDERS[provider].cookieKey;
+    var prefix = key + '=';
     var cookies = document.cookie.split(';');
 
     for (var index = 0; index < cookies.length; index++) {
@@ -1004,14 +1049,16 @@
     return null;
   }
 
-  function saveApiKeyCookie(apiKey) {
-    document.cookie = API_KEY_COOKIE + '=' +
+  function saveApiKeyCookie(provider, apiKey) {
+    var key = PROVIDERS[provider].cookieKey;
+    document.cookie = key + '=' +
       encodeURIComponent(apiKey) +
       '; max-age=31536000; path=/; SameSite=Lax';
   }
 
-  function removeApiKeyCookie() {
-    document.cookie = API_KEY_COOKIE +
+  function removeApiKeyCookie(provider) {
+    var key = PROVIDERS[provider].cookieKey;
+    document.cookie = key +
       '=; max-age=0; path=/; SameSite=Lax';
   }
 
@@ -1030,16 +1077,18 @@
     messagesText,
     count,
     apiKey,
-    promptTemplate
+    promptTemplate,
+    provider
   ) {
     var text = messagesText.length > MAX_CHARS
       ? messagesText.slice(-MAX_CHARS)
       : messagesText;
 
     var prompt = promptTemplate || PROMPT_TEMPLATES.allEvents;
+    var providerConfig = PROVIDERS[provider];
 
     var body = {
-      model: QWEN_MODEL,
+      model: providerConfig.model,
       messages: [
         {
           role: 'system',
@@ -1056,10 +1105,10 @@
       max_tokens: 2000
     };
 
-    return requestQwen(body, apiKey);
+    return requestAI(body, apiKey, provider);
   }
 
-  function requestQwen(body, apiKey) {
+  function requestAI(body, apiKey, provider) {
     return new Promise(function(resolve, reject) {
       if (
         typeof GM === 'undefined' ||
@@ -1074,6 +1123,7 @@
         return;
       }
 
+      var providerConfig = PROVIDERS[provider];
       var settled = false;
 
       var timer = setTimeout(function() {
@@ -1085,7 +1135,7 @@
 
         reject(
           new Error(
-            'Qwen Cloud не ответил за ' +
+            providerConfig.name + ' не ответил за ' +
             QWEN_TIMEOUT / 1000 +
             ' секунд.'
           )
@@ -1095,7 +1145,7 @@
       try {
         GM.xmlHttpRequest({
           method: 'POST',
-          url: QWEN_URL,
+          url: providerConfig.url,
           timeout: QWEN_TIMEOUT,
           headers: {
             'Content-Type': 'application/json',
@@ -1110,10 +1160,11 @@
             settled = true;
             clearTimeout(timer);
 
-            parseQwenResponse(
+            parseAIResponse(
               response,
               resolve,
-              reject
+              reject,
+              provider
             );
           },
           onerror: function() {
@@ -1126,7 +1177,7 @@
 
             reject(
               new Error(
-                'Сетевая ошибка при обращении к Qwen Cloud.'
+                'Сетевая ошибка при обращении к ' + providerConfig.name + '.'
               )
             );
           },
@@ -1140,7 +1191,7 @@
 
             reject(
               new Error(
-                'Qwen Cloud не ответил за ' +
+                providerConfig.name + ' не ответил за ' +
                 QWEN_TIMEOUT / 1000 +
                 ' секунд.'
               )
@@ -1159,15 +1210,16 @@
     });
   }
 
-  function parseQwenResponse(response, resolve, reject) {
+  function parseAIResponse(response, resolve, reject, provider) {
     var data;
+    var providerName = PROVIDERS[provider].name;
 
     try {
       data = JSON.parse(response.responseText);
     } catch (error) {
       reject(
         new Error(
-          'Qwen вернул некорректный ответ:\n' +
+          providerName + ' вернул некорректный ответ:\n' +
           response.responseText.substring(0, 500)
         )
       );
@@ -1189,8 +1241,8 @@
 
       if (isQuotaExhausted) {
         reject(
-          createQwenError(
-            'Превышен лимит обращений к Qwen Cloud. ',
+          createAIError(
+            'Превышен лимит обращений к ' + providerName + '. ',
             response.status,
             'QUOTA_EXHAUSTED'
           )
@@ -1199,7 +1251,7 @@
       }
 
       reject(
-        createQwenError(
+        createAIError(
           'HTTP ' + response.status + ': ' + message,
           response.status
         )
@@ -1207,7 +1259,7 @@
       return;
     }
 
-    function createQwenError(message, status, code) {
+    function createAIError(message, status, code) {
       var error = new Error(message);
 
       error.status = status;
@@ -1224,7 +1276,7 @@
     if (typeof content !== 'string') {
       reject(
         new Error(
-          'Qwen не вернул текст резюме.'
+          providerName + ' не вернул текст резюме.'
         )
       );
       return;
