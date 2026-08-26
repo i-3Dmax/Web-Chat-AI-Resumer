@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         VK chat AI-resumer
 // @namespace    vk-chat-resume
-// @version      2.5.2
+// @version      2.6.0
 // @updateURL    https://raw.githubusercontent.com/i-3Dmax/vk.ru-chat-resume/main/vk-chat-resume.user.js
 // @downloadURL  https://raw.githubusercontent.com/i-3Dmax/vk.ru-chat-resume/main/vk-chat-resume.user.js
 // @description  Экспорт сообщений VK и резюме через Qwen/DeepSeek
@@ -37,7 +37,7 @@
       cookieKey: 'vk-exporter-deepseek-api-key'
     },
     openrouter: {
-      name: 'OpenRouter (бесплатно)',
+      name: 'OpenRouter',
       url: 'https://openrouter.ai/api/v1/chat/completions',
       model: 'openrouter/free',
       cookieKey: 'vk-exporter-openrouter-api-key'
@@ -45,6 +45,7 @@
   };
 
   var DEFAULT_PROVIDER = 'qwen';
+  var PROVIDER_STORAGE_KEY = 'vk-exporter-selected-provider';
   var MAX_CHARS = 60000;
   var VK_TIMEOUT = 30000;
   var QWEN_TIMEOUT = 120000;
@@ -675,6 +676,7 @@
       'border-radius:5px;font-size:14px;';
 
     var providerKeys = Object.keys(PROVIDERS);
+    var savedProvider = getSavedProvider();
     for (var i = 0; i < providerKeys.length; i++) {
       var key = providerKeys[i];
       var option = document.createElement('option');
@@ -682,6 +684,11 @@
       option.textContent = PROVIDERS[key].name;
       providerSelect.appendChild(option);
     }
+    providerSelect.value = savedProvider;
+
+    providerSelect.addEventListener('change', function() {
+      saveProvider(providerSelect.value);
+    });
 
     var allEventsButton = createModeButton(
       'Все события',
@@ -1032,6 +1039,21 @@
     return apiKey && apiKey.trim()
       ? apiKey.trim()
       : null;
+  }
+
+  function getSavedProvider() {
+    try {
+      return localStorage.getItem(PROVIDER_STORAGE_KEY) || DEFAULT_PROVIDER;
+    } catch (e) {
+      return DEFAULT_PROVIDER;
+    }
+  }
+
+  function saveProvider(provider) {
+    try {
+      localStorage.setItem(PROVIDER_STORAGE_KEY, provider);
+    } catch (e) {
+    }
   }
 
   function getApiKeyCookie(provider) {
@@ -1428,7 +1450,7 @@
       'border-radius:5px;';
 
     var copyButton = makeButton(
-      'Скопировать результат',
+      'Копировать резюме',
       '#2d8a57',
       '📋'
     );
