@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         VK chat AI-resumer
 // @namespace    vk-chat-resume
-// @version      2.7.0
+// @version      2.8.0
 // @updateURL    https://raw.githubusercontent.com/i-3Dmax/vk.ru-chat-resume/main/vk-chat-resume.user.js
 // @downloadURL  https://raw.githubusercontent.com/i-3Dmax/vk.ru-chat-resume/main/vk-chat-resume.user.js
 // @description  Экспорт сообщений VK и резюме через Qwen/DeepSeek
@@ -30,16 +30,16 @@
       model: 'qwen-plus',
       cookieKey: 'vk-exporter-qwen-api-key'
     },
-    deepseek: {
-      name: 'DeepSeek',
-      url: 'https://api.deepseek.com/v1/chat/completions',
-      model: 'deepseek-chat',
-      cookieKey: 'vk-exporter-deepseek-api-key'
-    },
     openrouter: {
-      name: 'OpenRouter',
+      name: 'OpenRouter (free)',
       url: 'https://openrouter.ai/api/v1/chat/completions',
       model: 'openrouter/free',
+      cookieKey: 'vk-exporter-openrouter-api-key'
+    },
+    openrouter_nemotron: {
+      name: 'OpenRouter (Nemotron 3 Ultra)',
+      url: 'https://openrouter.ai/api/v1/chat/completions',
+      model: 'nvidia/nemotron-3-ultra-550b-a55b:free',
       cookieKey: 'vk-exporter-openrouter-api-key'
     }
   };
