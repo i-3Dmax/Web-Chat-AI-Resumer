@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         VK chat AI-resumer
 // @namespace    vk-chat-resume
-// @version      2.8.0
+// @version      2.9.0
 // @updateURL    https://raw.githubusercontent.com/i-3Dmax/vk.ru-chat-resume/main/vk-chat-resume.user.js
 // @downloadURL  https://raw.githubusercontent.com/i-3Dmax/vk.ru-chat-resume/main/vk-chat-resume.user.js
 // @description  Экспорт сообщений VK и резюме через Qwen/DeepSeek
@@ -261,7 +261,7 @@
 
     launcher.id = 'vk-exporter-launcher';
     launcher.type = 'button';
-    launcher.textContent = '✨ Резюме';
+    launcher.textContent = '✨ Резюме чата';
 
     launcher.style.cssText =
       'position:fixed;' +
@@ -397,7 +397,7 @@
     var daysInput = document.createElement('input');
     daysInput.type = 'number';
     daysInput.min = '1';
-    daysInput.value = '2';
+    daysInput.value = '1';
     daysInput.style.cssText =
       'display:block;width:100%;box-sizing:border-box;' +
       'margin-top:6px;padding:9px;border:1px solid #ccd3da;' +
@@ -1441,7 +1441,7 @@
 
     var title = document.createElement('div');
 
-    title.textContent = '✨ Резюме за последние ' +
+    title.textContent = '✨ Резюме чата за последние ' +
       (periodText || '1 ч.');
     title.style.cssText =
       'margin-bottom:10px;' +
@@ -1629,13 +1629,14 @@
 
   function addButton3dEffect(button) {
     var baseShadow =
-      '0 2px 4px rgba(0,0,0,.15),' +
-      '0 1px 2px rgba(0,0,0,.1);';
+      '0 2px 5px rgba(0,0,0,.25),' +
+      '0 1px 3px rgba(0,0,0,.18);';
     var hoverShadow =
-      '0 3px 6px rgba(0,0,0,.2),' +
-      '0 2px 4px rgba(0,0,0,.12);';
+      '0 4px 8px rgba(0,0,0,.3),' +
+      '0 2px 4px rgba(0,0,0,.2);';
 
     button.style.boxShadow = baseShadow;
+    button.style.borderRadius = '5px';
     button.style.transition =
       'background-color 0.2s ease,transform 0.12s ease,' +
       'box-shadow 0.12s ease;';
@@ -1645,8 +1646,8 @@
     });
 
     button.addEventListener('mousedown', function() {
-      button.style.transform = 'translateY(1px);';
-      button.style.boxShadow = '0 1px 2px rgba(0,0,0,.1);';
+      button.style.transform = 'translateY(2px);';
+      button.style.boxShadow = '0 1px 2px rgba(0,0,0,.2);';
     });
 
     button.addEventListener('mouseup', function() {
