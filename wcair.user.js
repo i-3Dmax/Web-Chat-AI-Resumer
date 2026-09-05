@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WCAIR - Web Chat AI Resumer
 // @namespace    chat-resume
-// @version      2.11.5
+// @version      2.13.1
 // @description  Экспорт сообщений из чатов MAX/VK и резюме через ИИ
 // @match        https://web.max.ru/*
 // @match        https://vk.ru/*
@@ -642,7 +642,17 @@
       'transition:background-color 0.2s ease,box-shadow 0.2s ease;';
 
     document.body.appendChild(launcher);
-    launcher.addEventListener('click', startExporter);
+    launcher.addEventListener('click', function() {
+      launcher.textContent = '⏳ Загрузка...';
+      launcher.disabled = true;
+      launcher.style.opacity = '0.7';
+      startExporter();
+      setTimeout(function() {
+        launcher.textContent = '✨ Резюме чата';
+        launcher.disabled = false;
+        launcher.style.opacity = '1';
+      }, 500);
+    });
     launcher.addEventListener('mouseover', function() {
       launcher.style.background = hoverColor;
       launcher.style.boxShadow = '0 5px 14px rgba(0,0,0,.35);';
@@ -702,7 +712,12 @@
         return;
       }
 
-      showModeMenu(chatId, scroller);
+      showModeMenu(
+        function(count, targetDate) {
+          loadMessagesFromDom(scroller, count, targetDate);
+        },
+        { maxCount: 500, btnColor: '#0aa8f0' }
+      );
     } else if (isVK) {
       var match = pageWindow.location.href.match(
         /\/convo\/(\d+)/
@@ -724,50 +739,64 @@
         ? urlId
         : 2000000000 + urlId;
 
-      showVkModeMenu(peerId);
+      showModeMenu(
+        function(count, targetDate) {
+          loadMessagesFromVkApi(peerId, count, targetDate);
+        },
+        { maxCount: 200, btnColor: '#4a76a8' }
+      );
     }
   }
 
-  function showModeMenu(chatId, scroller) {
+  // ------------------------------------------------------------------
+  // Общие стили для меню
+  // ------------------------------------------------------------------
+  var MENU_STYLE =
+    'position:fixed;' +
+    'right:20px;' +
+    'bottom:136px;' +
+    'z-index:999999;' +
+    'width:310px;' +
+    'padding:16px;' +
+    'background:#2b2b31;' +
+    'color:#eee;' +
+    'border:1px solid #444;' +
+    'border-radius:8px;' +
+    'box-shadow:0 4px 18px rgba(0,0,0,.25);' +
+    'font:14px Arial,sans-serif;';
+
+  var INPUT_STYLE =
+    'display:block;width:100%;box-sizing:border-box;' +
+    'margin-top:6px;padding:9px;border:1px solid #ccd3da;' +
+    'border-radius:5px;font-size:14px;';
+
+  var LABEL_STYLE = 'display:block;margin-top:0;font-weight:bold;';
+
+  function showModeMenu(loadHandler, options) {
     removeElement('maxair-mode-menu');
 
-    var menu = document.createElement('div');
+    var maxCount = options.maxCount || 500;
+    var btnColor = options.btnColor || '#0aa8f0';
 
+    var menu = document.createElement('div');
     menu.id = 'maxair-mode-menu';
-    menu.style.cssText =
-      'position:fixed;' +
-      'right:20px;' +
-      'bottom:136px;' +
-      'z-index:999999;' +
-      'width:310px;' +
-      'padding:16px;' +
-      'background:#2b2b31;' +
-      'color:#eee;' +
-      'border:1px solid #444;' +
-      'border-radius:8px;' +
-      'box-shadow:0 4px 18px rgba(0,0,0,.25);' +
-      'font:14px Arial,sans-serif;';
+    menu.style.cssText = MENU_STYLE;
 
     var countLabel = document.createElement('label');
     countLabel.textContent = 'Последние сообщения:';
-    countLabel.style.cssText =
-      'display:block;margin-top:0;font-weight:bold;';
+    countLabel.style.cssText = LABEL_STYLE;
 
     var countInput = document.createElement('input');
     countInput.type = 'number';
     countInput.min = '1';
-    countInput.max = '500';
+    countInput.max = String(maxCount);
     countInput.value = '80';
-    countInput.style.cssText =
-      'display:block;width:100%;box-sizing:border-box;' +
-      'margin-top:6px;padding:9px;border:1px solid #ccd3da;' +
-      'border-radius:5px;font-size:14px;';
+    countInput.style.cssText = INPUT_STYLE;
 
-    var countButton = createModeButton(
-      'Загрузить последние сообщения',
-      '#0aa8f0',
-      '📋'
+    var countButton = makeButton(
+      'Загрузить последние сообщения', btnColor, '📋'
     );
+    countButton.style.marginTop = '8px';
 
     var daysLabel = document.createElement('label');
     daysLabel.textContent = 'Сообщения за период, дней:';
@@ -778,16 +807,12 @@
     daysInput.type = 'number';
     daysInput.min = '1';
     daysInput.value = '1';
-    daysInput.style.cssText =
-      'display:block;width:100%;box-sizing:border-box;' +
-      'margin-top:6px;padding:9px;border:1px solid #ccd3da;' +
-      'border-radius:5px;font-size:14px;';
+    daysInput.style.cssText = INPUT_STYLE;
 
-    var daysButton = createModeButton(
-      'Загрузить сообщения за период',
-      '#2d8a57',
-      '📅'
+    var daysButton = makeButton(
+      'Загрузить сообщения за период', '#2d8a57', '📅'
     );
+    daysButton.style.marginTop = '8px';
 
     menu.appendChild(countLabel);
     menu.appendChild(countInput);
@@ -797,14 +822,35 @@
     menu.appendChild(daysButton);
     document.body.appendChild(menu);
 
+    function closeModeMenu() {
+      menu.remove();
+      document.removeEventListener('keydown', onEscape);
+      document.removeEventListener('click', onOutsideClick, true);
+    }
+
+    function onEscape(e) {
+      if (e.key === 'Escape') {
+        closeModeMenu();
+      }
+    }
+
+    function onOutsideClick(e) {
+      if (!menu.contains(e.target)) {
+        closeModeMenu();
+      }
+    }
+
+    document.addEventListener('keydown', onEscape);
+    document.addEventListener('click', onOutsideClick, true);
+
     countButton.addEventListener('click', function() {
       var count = Math.min(
         Math.max(parseInt(countInput.value, 10) || 80, 1),
-        500
+        maxCount
       );
 
-      menu.remove();
-      loadMessagesFromDom(scroller, count, null);
+      closeModeMenu();
+      loadHandler(count, null);
     });
 
     daysButton.addEventListener('click', function() {
@@ -816,109 +862,8 @@
       var targetDate = Math.floor(Date.now() / 1000) -
         days * 24 * 60 * 60;
 
-      menu.remove();
-      loadMessagesFromDom(scroller, null, targetDate);
-    });
-  }
-
-  function createModeButton(text, color, icon) {
-    var button = makeButton(text, color, icon);
-
-    button.style.marginTop = '8px';
-
-    return button;
-  }
-
-  function showVkModeMenu(peerId) {
-    removeElement('maxair-mode-menu');
-
-    var menu = document.createElement('div');
-
-    menu.id = 'maxair-mode-menu';
-    menu.style.cssText =
-      'position:fixed;' +
-      'right:20px;' +
-      'bottom:136px;' +
-      'z-index:999999;' +
-      'width:310px;' +
-      'padding:16px;' +
-      'background:#2b2b31;' +
-      'color:#eee;' +
-      'border:1px solid #444;' +
-      'border-radius:8px;' +
-      'box-shadow:0 4px 18px rgba(0,0,0,.25);' +
-      'font:14px Arial,sans-serif;';
-
-    var countLabel = document.createElement('label');
-    countLabel.textContent = 'Последние сообщения:';
-    countLabel.style.cssText =
-      'display:block;margin-top:0;font-weight:bold;';
-
-    var countInput = document.createElement('input');
-    countInput.type = 'number';
-    countInput.min = '1';
-    countInput.max = '200';
-    countInput.value = '80';
-    countInput.style.cssText =
-      'display:block;width:100%;box-sizing:border-box;' +
-      'margin-top:6px;padding:9px;border:1px solid #ccd3da;' +
-      'border-radius:5px;font-size:14px;';
-
-    var countButton = createModeButton(
-      'Загрузить последние сообщения',
-      '#4a76a8',
-      '📋'
-    );
-
-    var daysLabel = document.createElement('label');
-    daysLabel.textContent = 'Сообщения за период, дней:';
-    daysLabel.style.cssText =
-      'display:block;margin-top:14px;font-weight:bold;';
-
-    var daysInput = document.createElement('input');
-    daysInput.type = 'number';
-    daysInput.min = '1';
-    daysInput.value = '1';
-    daysInput.style.cssText =
-      'display:block;width:100%;box-sizing:border-box;' +
-      'margin-top:6px;padding:9px;border:1px solid #ccd3da;' +
-      'border-radius:5px;font-size:14px;';
-
-    var daysButton = createModeButton(
-      'Загрузить сообщения за период',
-      '#2d8a57',
-      '📅'
-    );
-
-    menu.appendChild(countLabel);
-    menu.appendChild(countInput);
-    menu.appendChild(countButton);
-    menu.appendChild(daysLabel);
-    menu.appendChild(daysInput);
-    menu.appendChild(daysButton);
-    document.body.appendChild(menu);
-
-    countButton.addEventListener('click', function() {
-      var count = Math.min(
-        Math.max(parseInt(countInput.value, 10) || 80, 1),
-        200
-      );
-
-      menu.remove();
-      loadMessagesFromVkApi(peerId, count, null);
-    });
-
-    daysButton.addEventListener('click', function() {
-      var days = Math.max(
-        parseInt(daysInput.value, 10) || 2,
-        1
-      );
-
-      var targetDate = Math.floor(Date.now() / 1000) -
-        days * 24 * 60 * 60;
-
-      menu.remove();
-      loadMessagesFromVkApi(peerId, null, targetDate);
+      closeModeMenu();
+      loadHandler(null, targetDate);
     });
   }
 
@@ -1819,14 +1764,10 @@
 
     var providerLabel = document.createElement('label');
     providerLabel.textContent = 'Провайдер AI:';
-    providerLabel.style.cssText =
-      'display:block;margin-top:0;font-weight:bold;';
+    providerLabel.style.cssText = LABEL_STYLE;
 
     var providerSelect = document.createElement('select');
-    providerSelect.style.cssText =
-      'display:block;width:100%;box-sizing:border-box;' +
-      'margin-top:6px;padding:9px;border:1px solid #ccd3da;' +
-      'border-radius:5px;font-size:14px;';
+    providerSelect.style.cssText = INPUT_STYLE;
 
     var providerKeys = Object.keys(PROVIDERS);
     var savedProvider = getSavedProvider();
@@ -1843,17 +1784,19 @@
       saveProvider(providerSelect.value);
     });
 
-    var allEventsButton = createModeButton(
+    var allEventsButton = makeButton(
       'Все события',
       '#0aa8f0',
       '💯'
     );
+    allEventsButton.style.marginTop = '8px';
 
-    var importantButton = createModeButton(
+    var importantButton = makeButton(
       'Только важные',
       '#2d8a57',
       '⭐'
     );
+    importantButton.style.marginTop = '8px';
 
     var copyMessagesButton = makeButton(
       'Копировать сообщения (' + count + ')',
@@ -2016,23 +1959,36 @@
         saveCustomPrompt(val);
         setButtonText(customPromptButton, val ? 'Свой промт ✓' : 'Свой промт');
         overlay.remove();
+        document.removeEventListener('keydown', onEditorEscape);
       });
 
       clearBtn.addEventListener('click', function() {
         saveCustomPrompt('');
         setButtonText(customPromptButton, 'Свой промт');
         overlay.remove();
+        document.removeEventListener('keydown', onEditorEscape);
       });
 
       cancelBtn.addEventListener('click', function() {
         overlay.remove();
+        document.removeEventListener('keydown', onEditorEscape);
       });
 
       overlay.addEventListener('click', function(e) {
         if (e.target === overlay) {
           overlay.remove();
+          document.removeEventListener('keydown', onEditorEscape);
         }
       });
+
+      function onEditorEscape(e) {
+        if (e.key === 'Escape') {
+          overlay.remove();
+          document.removeEventListener('keydown', onEditorEscape);
+        }
+      }
+
+      document.addEventListener('keydown', onEditorEscape);
     });
   }
 
@@ -2074,7 +2030,10 @@
           restoreAuthorNames(summary, anonymized.names),
           messagesText,
           count,
-          periodText
+          periodText,
+          promptTemplate,
+          provider,
+          anonymized
         );
       })
       .catch(function(error) {
@@ -2601,7 +2560,10 @@
     text,
     messagesText,
     count,
-    periodText
+    periodText,
+    promptTemplate,
+    currentProvider,
+    anonymized
   ) {
     removeElement('maxair-result');
 
@@ -2671,6 +2633,35 @@
 
     var closeButton = makeButton('Закрыть', '#777', '×');
 
+    var reProviderRow = document.createElement('div');
+    reProviderRow.style.cssText =
+      'display:flex;gap:6px;align-items:center;margin-top:12px;';
+
+    var reProviderSelect = document.createElement('select');
+    reProviderSelect.style.cssText =
+      'flex:1;padding:8px;border:1px solid #ccd3da;' +
+      'border-radius:5px;font-size:13px;';
+
+    var providerKeys = Object.keys(PROVIDERS);
+    for (var i = 0; i < providerKeys.length; i++) {
+      var pKey = providerKeys[i];
+      var opt = document.createElement('option');
+      opt.value = pKey;
+      opt.textContent = PROVIDERS[pKey].name;
+      reProviderSelect.appendChild(opt);
+    }
+    reProviderSelect.value = currentProvider;
+
+    var reRunBtn = makeButton('Запросить', '#9b59b6', '🔄', true);
+    reRunBtn.style.width = 'auto';
+    reRunBtn.style.minWidth = '110px';
+    reRunBtn.style.flex = '0 0 auto';
+    reRunBtn.style.padding = '8px 14px';
+    reRunBtn.style.fontSize = '13px';
+
+    reProviderRow.appendChild(reProviderSelect);
+    reProviderRow.appendChild(reRunBtn);
+
     var actions = document.createElement('div');
 
     actions.style.cssText =
@@ -2707,6 +2698,7 @@
     box.appendChild(title);
     box.appendChild(area);
     box.appendChild(actions);
+    box.appendChild(reProviderRow);
     document.body.appendChild(box);
 
     var maxAreaHeight = Math.max(
@@ -2757,7 +2749,70 @@
 
     closeButton.addEventListener('click', function() {
       box.remove();
+      document.removeEventListener('keydown', onResultEscape);
     });
+
+    reRunBtn.addEventListener('click', function() {
+      var newProvider = reProviderSelect.value;
+
+      if (newProvider === currentProvider) {
+        alert('Выберите другой провайдер.');
+        return;
+      }
+
+      var apiKey = getApiKeyCookie(newProvider);
+
+      if (!apiKey) {
+        apiKey = promptForApiKey(newProvider);
+
+        if (!apiKey) {
+          return;
+        }
+      }
+
+      box.remove();
+      document.removeEventListener('keydown', onResultEscape);
+
+      showStatus('Анализ через ' + PROVIDERS[newProvider].name + '...');
+
+      var toAnonymize = anonymized
+        ? anonymized
+        : anonymizeMessages(messagesText);
+
+      makeSummaryWithRetry(
+        toAnonymize.text,
+        count,
+        apiKey.trim(),
+        promptTemplate,
+        newProvider
+      )
+        .then(function(newSummary) {
+          removeElement('maxair-status');
+          showResult(
+            restoreAuthorNames(newSummary, toAnonymize.names),
+            messagesText,
+            count,
+            periodText,
+            promptTemplate,
+            newProvider,
+            toAnonymize
+          );
+        })
+        .catch(function(error) {
+          removeElement('maxair-status');
+          alert('Ошибка анализа:\n\n' + error.message);
+          showPromptMenu(messagesText, count, periodText);
+        });
+    });
+
+    function onResultEscape(e) {
+      if (e.key === 'Escape' && document.getElementById('maxair-result')) {
+        box.remove();
+        document.removeEventListener('keydown', onResultEscape);
+      }
+    }
+
+    document.addEventListener('keydown', onResultEscape);
   }
 
   // ------------------------------------------------------------------
@@ -2810,6 +2865,14 @@
 
     button.addEventListener('mouseout', function() {
       button.style.background = button.buttonColor;
+    });
+
+    button.addEventListener('mousedown', function() {
+      button.style.transform = 'scale(0.97)';
+    });
+
+    button.addEventListener('mouseup', function() {
+      button.style.transform = 'scale(1)';
     });
 
     return button;
