@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WCAIR - Web Chat AI Resumer
 // @namespace    chat-resume
-// @version      2.14.0
+// @version      2.14.1
 // @description  Экспорт сообщений из чатов MAX/VK и резюме через ИИ
 // @match        https://web.max.ru/*
 // @match        https://vk.ru/*
@@ -2369,7 +2369,7 @@
         }
       ],
       temperature: 0.2,
-      max_tokens: 2000
+      max_tokens: 4000
     };
 
     return requestAI(body, apiKey, provider);
