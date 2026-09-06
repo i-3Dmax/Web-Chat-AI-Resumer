@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WCAIR - Web Chat AI Resumer
 // @namespace    chat-resume
-// @version      2.13.1
+// @version      2.14.0
 // @description  Экспорт сообщений из чатов MAX/VK и резюме через ИИ
 // @match        https://web.max.ru/*
 // @match        https://vk.ru/*
@@ -466,6 +466,12 @@
       name: 'OpenRouter (Nemotron 3 Ultra)',
       url: 'https://openrouter.ai/api/v1/chat/completions',
       model: 'nvidia/nemotron-3-ultra-550b-a55b:free',
+      cookieKey: sitePrefix + '-openrouter-api-key'
+    },
+    openrouter_ling: {
+      name: 'OpenRouter (Ling 3.0 Flash)',
+      url: 'https://openrouter.ai/api/v1/chat/completions',
+      model: 'inclusionai/ling-3.0-flash-fin:free',
       cookieKey: sitePrefix + '-openrouter-api-key'
     }
   };
