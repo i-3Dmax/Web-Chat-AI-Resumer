@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WCAIR - Web Chat AI Resumer
 // @namespace    chat-resume
-// @version      2.14.1
+// @version      2.14.2
 // @description  Экспорт сообщений из чатов MAX/VK и резюме через ИИ
 // @match        https://web.max.ru/*
 // @match        https://vk.ru/*
@@ -9,11 +9,8 @@
 // @downloadURL  http://localhost:3000/wcair.user.js
 // @grant        unsafeWindow
 // @grant        GM.xmlHttpRequest
-// @grant        GM.setClipboard
 // @grant        GM_registerMenuCommand
 // @connect      dashscope-intl.aliyuncs.com
-// @connect      dashscope.aliyuncs.com
-// @connect      api.deepseek.com
 // @connect      openrouter.ai
 // @run-at       document-start
 // @license      MIT
