@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WCAIR - Web Chat AI Resumer
 // @namespace    chat-resume
-// @version      2.14.3
+// @version      2.14.4
 // @description  Экспорт сообщений из чатов MAX/VK и резюме через ИИ
 // @match        https://web.max.ru/*
 // @match        https://vk.ru/*
@@ -845,7 +845,8 @@
   }
 
   function hasMessages(el) {
-    return !!el.querySelector('[data-author-color]');
+    return !!el.querySelector('[data-author-color]') ||
+      !!el.querySelector('.bubbleContent');
   }
 
   function closestByClass(el, cls) {
@@ -904,24 +905,41 @@
         return scored[0].el;
       }
 
-      var fallback = document.querySelector(
-        DOM_CONF.scrollContainerSelector ||
-        '.scrollListScrollable'
-      );
+      var fallback = null;
+      var fallbackBest = -1;
+      candidates.forEach(function(sl) {
+        var bubbles = sl.querySelectorAll('.bubbleContent').length;
+        if (bubbles > fallbackBest) {
+          fallbackBest = bubbles;
+          fallback = sl;
+        }
+      });
+      if (!fallback) {
+        fallback = document.querySelector(
+          DOM_CONF.scrollContainerSelector ||
+          '.scrollListScrollable'
+        );
+      }
       if (fallback) {
         return fallback;
       }
     }
 
     var all = document.querySelectorAll('*');
+    var best = null;
+    var bestBubbles = -1;
 
     for (var k = 0; k < all.length; k++) {
       if (isScrollable(all[k]) && hasMessages(all[k])) {
-        return all[k];
+        var bub = all[k].querySelectorAll('.bubbleContent').length;
+        if (bub > bestBubbles) {
+          bestBubbles = bub;
+          best = all[k];
+        }
       }
     }
 
-    return null;
+    return best;
   }
 
   function loadMessagesFromDom(scroller, limit, targetDate) {
