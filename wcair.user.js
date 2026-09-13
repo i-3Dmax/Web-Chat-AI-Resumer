@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WCAIR - Web Chat AI Resumer
 // @namespace    chat-resume
-// @version      2.14.2
+// @version      2.14.3
 // @description  Экспорт сообщений из чатов MAX/VK и резюме через ИИ
 // @match        https://web.max.ru/*
 // @match        https://vk.ru/*
@@ -20,9 +20,6 @@
 (function() {
   'use strict';
 
-  // ------------------------------------------------------------------
-  // ОПРЕДЕЛЕНИЕ САЙТА
-  // ------------------------------------------------------------------
   var hostname = window.location.hostname;
   var isMax = hostname === 'web.max.ru';
   var isVK = hostname === 'vk.ru';
@@ -32,24 +29,10 @@
     return;
   }
 
-  // ------------------------------------------------------------------
-  // VK-специфичные константы
-  // ------------------------------------------------------------------
   var VK_TIMEOUT = 30000;
   var BRIDGE_NAME = 'vk-exporter-bridge';
   var bridgeRequests = {};
 
-  // ------------------------------------------------------------------
-  // НАСТРОЙКИ DOM-Скрейпинга для web.max.ru
-  // ------------------------------------------------------------------
-  // Сообщения в MAX отрисовываются на клиенте (SvelteKit, виртуальный
-  // список), внутреннего API вида window.vkApi нет. Поэтому текст
-  // сообщений читается напрямую из отрисованного DOM.
-  //
-  // Селекторы ниже можно уточнить после запуска команды:
-  //   window.__maxAirInspect()
-  // в консоли браузера на открытой беседе. Если селектор пустой - для
-  // соответствующего поля будет использоваться автоопределение.
   var DOM_CONF = {
     composerSelector: '[data-testid="composer"]',
     scrollContainerSelector: '.scrollable.scrollListScrollable',
@@ -58,14 +41,10 @@
     messageTimeSelector: '.bubbleContent .meta .text',
     messageTextSelector: '.bubbleContent > .text',
     dateSelector: '.capsuleSeparator .capsule',
-    // Блок "ответ на сообщение": кнопка с автором цитируемого и цитатой.
     replyBlockSelector: '.link button.mark',
     replyAuthorSelector: '.author .name .text'
   };
 
-  // ------------------------------------------------------------------
-  // VK-специфичные функции (мост для работы с VK API)
-  // ------------------------------------------------------------------
   function installVkBridge() {
     if (!isVK) return;
 
@@ -441,9 +420,6 @@
     );
   }
 
-  // ------------------------------------------------------------------
-  // ИИ-провайдеры
-  // ------------------------------------------------------------------
   var sitePrefix = isMax ? 'maxair' : 'vk-exporter';
 
   var PROVIDERS = {
@@ -523,14 +499,12 @@
     ? unsafeWindow
     : window;
 
-  // Известные служебные маршруты MAX, не являющиеся беседой
   var KNOWN_ROUTES = [
     'joincall', 'join', 'stickerset', 'u', 'c',
     'settings', 'push', 'folder', 'share', 'share-self-out',
     '_storybook', 'undefined'
   ];
 
-  // document-start: body может ещё не существовать, ждём его
   var bodyInitDone = false;
   function initBodyDependent() {
     if (bodyInitDone) { return; }
@@ -559,9 +533,6 @@
     setInterval(initBodyDependent, 200);
   }
 
-  // MAX - одностраничное приложение (SvelteKit): при переключении бесед
-  // DOM пересобирается без перезагрузки страницы. Следим за сменой URL
-  // и сбрасываем устаревшие элементы интерфейса и состояние контейнера.
   var lastUrl = pageWindow.location.href;
 
   function watchUrlChanges() {
@@ -583,9 +554,6 @@
     updateLauncherVisibility();
   }
 
-  // ------------------------------------------------------------------
-  // Определение открытой беседы MAX
-  // ------------------------------------------------------------------
   function getCurrentChatId() {
     var path = pageWindow.location.pathname.replace(/^\/+|\/+$/g, '');
     var segments = path.split('/').filter(function(s) { return s; });
@@ -613,9 +581,6 @@
     return false;
   }
 
-  // ------------------------------------------------------------------
-  // Кнопка-лаунчер (как в VK-версии, стиль MAX)
-  // ------------------------------------------------------------------
   function createLauncher() {
     removeElement('maxair-launcher');
 
@@ -677,9 +642,6 @@
     }
   }
 
-  // ------------------------------------------------------------------
-  // Набор пользователем способа загрузки сообщений
-  // ------------------------------------------------------------------
   function startExporter() {
     var modeMenu = document.getElementById('maxair-mode-menu');
 
@@ -751,9 +713,6 @@
     }
   }
 
-  // ------------------------------------------------------------------
-  // Общие стили для меню
-  // ------------------------------------------------------------------
   var MENU_STYLE =
     'position:fixed;' +
     'right:20px;' +
@@ -870,10 +829,6 @@
     });
   }
 
-  // ------------------------------------------------------------------
-  // Поиск контейнера прокрутки сообщений
-  // ------------------------------------------------------------------
-  // Является ли элемент прокручиваемым контейнером со списком сообщений
   function isScrollable(el) {
     if (!el || el === document.body || el === document.documentElement) {
       return false;
@@ -889,12 +844,10 @@
     return el.scrollHeight > el.clientHeight + 20;
   }
 
-  // Содержит ли элемент (в текущих DOM) строки сообщений
   function hasMessages(el) {
     return !!el.querySelector('[data-author-color]');
   }
 
-  // Возвращает ближайшего предка с искомым классом (аналог closest)
   function closestByClass(el, cls) {
     var n = el;
 
@@ -908,27 +861,18 @@
     return null;
   }
 
-  // Находит контейнер прокрутки списка сообщений.
-  // Список сообщений в MAX - это элемент с классом .scrollListScrollable,
-  // который находится внутри области .openedChat открытой беседы.
-  // В области .openedChat сообщения живут отдельно от поля ввода, а в 1-на-1
-  // беседах у сообщений нет блока автора [data-author-color], поэтому поиск
-  // идёт по классу и близости к открытой беседе (а не по атрибуту автора).
   function findScrollContainer() {
     var composer = document.querySelector(DOM_CONF.composerSelector);
     var chatRoot = composer ? closestByClass(composer, 'openedChat') : null;
 
     var candidates = [];
 
-    // Кандидаты из настроенного селектора (может совпадать с несколькими
-    // элементами, например sidebar и список сообщений текущей беседы).
     if (DOM_CONF.scrollContainerSelector) {
       candidates = Array.prototype.slice.call(
         document.querySelectorAll(DOM_CONF.scrollContainerSelector)
       );
     }
 
-    // Дополняем общим списком прокручиваемых элементов
     Array.prototype.slice.call(
       document.querySelectorAll('.scrollListScrollable')
     ).forEach(function(el) {
@@ -941,12 +885,10 @@
       var scored = candidates.map(function(sl) {
         var score = 0;
 
-        // Главный приоритет: контейнер внутри открытой беседы (.openedChat)
         if (chatRoot && chatRoot.contains(sl)) {
           score += 100;
         }
 
-        // Сообщения почти всегда содержат больше контента
         if (hasMessages(sl)) {
           score += 30;
         }
@@ -962,7 +904,6 @@
         return scored[0].el;
       }
 
-      // Если ни один не оказался явно в беседе - берём системный fallback
       var fallback = document.querySelector(
         DOM_CONF.scrollContainerSelector ||
         '.scrollListScrollable'
@@ -972,7 +913,6 @@
       }
     }
 
-    // Запасной вариант: любой прокручиваемый элемент со строками сообщений
     var all = document.querySelectorAll('*');
 
     for (var k = 0; k < all.length; k++) {
@@ -984,16 +924,6 @@
     return null;
   }
 
-  // ------------------------------------------------------------------
-  // Загрузка сообщений из DOM (скрейпинг)
-  // ------------------------------------------------------------------
-  // ВАЖНО про web.max.ru: список сообщений ВИРТУАЛИЗИРОВАННЫЙ - в DOM
-  // одновременно присутствует лишь окно (у нас ~25 .item), а более старые
-  // подгружаются только когда верхний sentinel попадает в зону видимости.
-  // Направление скролла (0 = свежие или 0 = старые) зависит от способа
-  // привязки списка, поэтому ниже направление АВТОКАЛИБРУЕТСЯ по data-index
-  // (самые свежие имеют наибольший индекс), а дальше идём к старым
-  // шагами по видимой высоте, давая MAX время на подгрузку.
   function loadMessagesFromDom(scroller, limit, targetDate) {
     var messages = [];
     var seen = {};
@@ -1005,33 +935,19 @@
     var maxPatience = 30;
     var totalRounds = 0;
     var maxRounds = 1500;
-    // Направление движения к более старым сообщениям в scrollTop:
-    // +1 = старые при УВЕЛИЧЕНИИ scrollTop (--bottom, 0 = свежие),
-    // -1 = старые при УМЕНЬШЕНИИ scrollTop (обычный список). Калибруется в startFromNewest.
     var olderDir = 1;
     var calibrated = false;
     var lastScrollHeight = 0;
-    // Рабочее направление подтяжки истории: сначала = калиброванное olderDir,
-    // но если по факту getMessages/scrollHeight не растут - переворачиваем
-    // (dirFlips ограничивает число смен направления).
     var scrollDir = 1;
     var dirFlips = 0;
     var maxDirFlips = 4;
-    // Порог неактивности (раундов), после которого пробуем сменить направление
-    // или завершиться.
     var pullQuietRounds = 0;
-    // Жёсткий таймаут всего сбора (мс), чтобы цикл никогда не висел вечно.
     var cycleT0 = Date.now();
     var maxCycleMs = 240000;
-    // Кол-во подряд идущих раундов, когда строки есть, но НИ ОДНА не
-    // распозналась парсером → селекторы не подходят для этого чата.
     var unparsedRounds = 0;
 
     showStatus('Загрузка сообщений...');
 
-    // Контейнер переспрашиваем на каждом шаге: в SPA-приложении DOM беседы
-    // пересобирается при переключении чатов, и переданный элемент может
-    // оказаться отсоединённым.
     var current = scroller || findScrollContainer();
 
     startFromNewest();
@@ -1073,8 +989,6 @@
         return;
       }
 
-      // Калибровка направления: самые свежие сообщения имеют наибольший
-      // data-index. Смотрим, где их больше - при scrollTop=0 или при максимуме.
       if (!calibrated) {
         calibrated = true;
 
@@ -1084,11 +998,10 @@
         current.scrollTop = current.scrollHeight;
         var idxMax = maxVisibleIndex();
 
-        // Свежие там, где index больше
         if (idxZero >= idxMax) {
-          olderDir = 1; // 0 = свежие, вверх = старые (--bottom)
+          olderDir = 1;
         } else {
-          olderDir = -1; // низ = свежие, вверх = старые (обычный)
+          olderDir = -1;
         }
 
         console.warn('[MAXAir] калибровка направления: свежие при scrollTop=0 -> ' +
@@ -1098,7 +1011,6 @@
 
       scrollDir = olderDir;
 
-      // Стартуем с самых свежих
       if (olderDir === 1) {
         current.scrollTop = 0;
       } else {
@@ -1124,9 +1036,6 @@
 
       totalRounds++;
 
-      // Диагностика каждой итерации: контейнер, позиция и сколько раз MAX
-      // ответил getMessages (через WS-хук). Помогает увидеть, реально ли
-      // крутится список и подгружается ли история.
       console.warn(
         '[MAXAir][D] r' + totalRounds +
         ' st=' + current.scrollTop + '/' + current.scrollHeight +
@@ -1185,9 +1094,6 @@
         });
       }
 
-      // Диагностика: если DOM полон .item, но ничего не распознаётся как новое,
-      // видно - либо парсер не находит текст (parsedCount << rowCount),
-      // либо сообщения дублируются (newCount === 0 при parsedCount > 0).
       console.warn(
         '[MAXAir][D] r' + totalRounds +
         ' rows=' + rowCount +
@@ -1198,8 +1104,6 @@
         ' scroll=' + current.scrollTop + '/' + current.scrollHeight
       );
 
-      // Предохранитель: есть строки, но ни одна не распознана - селекторы
-      // не подходят для этого чата. Завершаемся и подсказываем __maxAirInspect.
       if (rowCount > 0 && parsedCount === 0) {
         unparsedRounds++;
         if (unparsedRounds >= 6) {
@@ -1221,13 +1125,11 @@
 
       showStatus('Загружено сообщений: ' + messages.length);
 
-      // Режим "за последние N дней": прошли вниз границу периода - хватит
       if (targetDate && messages.length && messages[0].date < targetDate) {
         finish();
         return;
       }
 
-      // Режим "последние N сообщений": набрали нужный объём
       if (!targetDate && messages.length >= limit) {
         finish();
         return;
@@ -1236,7 +1138,6 @@
       var noNew = messages.length <= before;
 
       if (rowCount === 0) {
-        // Список ещё рендерится - ждём, не двигаясь (чтобы не потерять позицию)
         if (noNewRounds >= maxPatience) {
           finish();
           return;
@@ -1253,24 +1154,11 @@
         noNewRounds = 0;
       }
 
-      // Тянем историю через ПРЯМУЮ установку scrollTop (проверено тестом
-      // прямым назначением): каждая установка scrollTop заставляет MAX слать
-      // getMessages и догружать старые сообщения -> растёт scrollHeight и в
-      // DOM появляются новые .item. Синтетические wheel-события НЕ работают.
-      //
-      // Стратегия: не полагаемся на калибровку направления. Каждый раунд
-      // делаем серию рывков scrollTop к "старому" краю в текущем scrollDir.
-      // Наблюдаем, растёт ли scrollHeight и отвечает ли MAX getMessages.
-      // Если несколько раундов подряд тихо - переворачиваем направление
-      // (максимум maxDirFlips раз), затем завершаемся.
 
-      // Сначала доезжаем к старому краю в выбранном направлении
       pullToEdge(scrollDir);
 
-      // Затем серия рывков за край, каждый - новая установка scrollTop
       PULL_OLDER(current, scrollDir);
 
-      // Ждём, пока MAX обработает (асинхронно шлёт getMessages и рендерит)
       setTimeout(proceedAfterPull, 200);
 
       function proceedAfterPull() {
@@ -1278,15 +1166,10 @@
           return;
         }
 
-        // Если контейнер пропал (SPA-переход) - переспросим
         if (!current || !document.documentElement.contains(current)) {
           acquireContainer();
         }
 
-        // Главный индикатор прогресса - РЕАЛЬНО появившиеся новые сообщения
-        // (newCount считается в начале этого раунда). НЕ полагаемся на
-        // scrollHeight: из-за виртуализации он может колебаться и вечно
-        // сбрасывать счётчики, из-за чего цикл зависал на "Загрузка...".
         if (newCount > 0) {
           noNewRounds = 0;
           edgeHoldRounds = 0;
@@ -1296,7 +1179,6 @@
           edgeHoldRounds++;
         }
 
-        // Жёсткий таймаут по времени - предохранитель от зависания
         if (Date.now() - cycleT0 >= maxCycleMs) {
           console.warn(
             '[MAXAir] остановка по таймауту (собрано ' +
@@ -1306,7 +1188,6 @@
           return;
         }
 
-        // Не было новых сообщений достаточно долго - дошли до конца
         if (noNewRounds >= 25) {
           console.warn(
             '[MAXAir] завершено: нет новых сообщений (собрано ' +
@@ -1316,7 +1197,6 @@
           return;
         }
 
-        // Направление не даёт загрузку: тихо долго, но ещё есть запас флипов
         if (edgeHoldRounds >= 12 && dirFlips < maxDirFlips) {
           dirFlips++;
           scrollDir = -scrollDir;
@@ -1339,21 +1219,17 @@
         setTimeout(collectPage, 300);
       }
 
-      // Предохранитель от бесконечного цикла (проверяем и до таймера)
       if (totalRounds >= maxRounds || Date.now() - cycleT0 >= maxCycleMs) {
         console.warn('[MAXAir] превышен лимит итераций', messages.length);
         finish();
         return;
       }
       } catch (err) {
-        // Любая ошибка внутри раунда не должна тихо убивать цикл и оставлять
-        // висящую надпись "Загрузка..." - логируем и завершаемся.
         console.error('[MAXAir][ERR] ошибка в цикле сбора:', err);
         finish();
       }
     }
 
-    // Подъезжает к старому краю контейнера в выбранном направлении.
     function pullToEdge(dir) {
       if (!current || !document.documentElement.contains(current)) {
         acquireContainer();
@@ -1389,8 +1265,6 @@
         return;
       }
 
-      // messages отсортированы по дате (от старых к новым).
-      // Для режима "за последние N дней" оставляем только то, что новее границы.
       var selected = targetDate
         ? messages.filter(function(m) { return m.date >= targetDate; })
         : messages.slice(-limit);
@@ -1402,10 +1276,6 @@
         return;
       }
 
-      // --- Ответы: добавляем "Ответ на сообщение ДАТА ВРЕМЯ от УЧАСТНИК" ---
-      // для сообщений, которые цитируют другое. Дату/время цитируемого ищем
-      // среди ВСЕХ собранных сообщений по совпадению текста-цитаты. Если не
-      // нашли - берём дату/время самого ответа как запасной вариант.
       function normReply(str) {
         return (str || '').replace(/[\s\u200B\u200C\u200D\uFEFF]+/g, ' ')
           .trim().toLowerCase();
@@ -1427,7 +1297,6 @@
         var rk = normReply(replyText);
         if (!rk) return null;
         if (quoteIndex[rk]) return quoteIndex[rk];
-        // MAX может обрезать длинную цитату многоточием - ищем по началу
         for (var i = 0; i < quoteKeys.length; i++) {
           var key = quoteKeys[i];
           if (key.indexOf(rk) === 0 || rk.indexOf(key) === 0) {
@@ -1479,13 +1348,6 @@
     }
   }
 
-  // Тянет историю к СТАРОМУ краю через прямую установку scrollTop.
-  // Доказано тестом: синтетические wheel/scroll-события
-  // MAX игнорирует, НО прямая установка container.scrollTop (scrollTop=0,
-  // scrollTo(0,0), плавное уменьшение, отрицательное значение) реально
-  // заставляет MAX отправлять getMessages и догружать старые сообщения
-  // (фрейм getMessages с убывающим курсором from). dir: 1 = старые при
-  // большом scrollTop, -1 = старые при малом.
   function PULL_OLDER(container, dir) {
     if (!container) {
       return;
@@ -1493,19 +1355,12 @@
 
     try {
       var edge = dir === 1 ? container.scrollHeight : 0;
-      // overshoot - значение заметно ЗА краем, чтобы каждая установка давала
-      // НОВОЕ значение scrollTop и гарантированно триггерила getMessages,
-      // даже когда контейнер уже упирается в край.
       var overshoot = dir === 1
         ? container.scrollHeight + (container.clientHeight || 400) * 3
         : -((container.clientHeight || 400) * 3);
 
-      // Сначала сразу на край
       container.scrollTop = edge;
 
-      // Серия рывков: попеременно за край и обратно на край, с паузами,
-      // чтобы MAX успевал принять каждую установку отдельно (он асинхронно
-      // шлёт getMessages и рендерит подгруженные строки).
       for (var i = 0; i < 6; i++) {
         (function(step) {
           setTimeout(function() {
@@ -1521,8 +1376,6 @@
     }
   }
 
-  // Возвращает сгенерированные в DOM строки сообщений (виртуальные элементы
-  // .item[data-index] внутри контейнера прокрутки).
   function getMessageRows(scroller) {
     if (DOM_CONF.messageRowSelector) {
       return Array.prototype.slice.call(
@@ -1541,10 +1394,6 @@
     'сентября': 8, 'октября': 9, 'ноября': 10, 'декабря': 11
   };
 
-  // Разбирает дату-разделитель в объект Date:
-  //   "Сегодня" -> сейчас (00:00)
-  //   "Вчера"   -> вчера (00:00)
-  //   "6 июня 2026" -> конкретная дата
   function parseCapsuleDate(text) {
     if (!text) {
       return null;
@@ -1583,7 +1432,6 @@
     return new Date(year, month, day);
   }
 
-  // Разбирает строку времени "14:40" и объединяет с датой дня
   function applyTimeToDate(dayDate, timeStr) {
     if (dayDate === null) {
       dayDate = new Date();
@@ -1603,11 +1451,7 @@
     return Math.floor(d.getTime() / 1000);
   }
 
-  // Разбирает один элемент .item в { author, text, date }.
-  // state.date хранит текущий "день" из разделителей-капсул, т.к. у
-  // самих сообщений в MAX показывается только время.
   function parseMessageRow(row, state) {
-    // Дата-разделитель (капсула) внутри элемента
     var dateNode = DOM_CONF.dateSelector
       ? row.querySelector(DOM_CONF.dateSelector)
       : row.querySelector('.capsuleSeparator .capsule');
@@ -1641,13 +1485,8 @@
 
     if (authorNode && authorNode.textContent.trim()) {
       author = authorNode.textContent.trim();
-      // Запоминаем автора, чтобы наследовать его следующим сообщениям той же
-      // серии (MAX показывает имя только у первого сообщения группы).
       state.lastAuthor = author;
     } else {
-      // У этой строки нет подписи автора (продолжение серии). Наследуем автора
-      // ПРЕДЫДУЩЕГО сообщения. Если предыдущего автора нет - для своих
-      // (исходящих) ставим "Я".
       author = state.lastAuthor || (!incoming ? 'Я' : '');
     }
 
@@ -1671,9 +1510,6 @@
 
     var date = applyTimeToDate(state.date, timeStr);
 
-    // Ответ на другое сообщение: внутри пузыря есть блок-кнопка с автором
-    // цитируемого и текстом-цитатой. Запоминаем цитату и автора, чтобы позже
-    // (в finish) найти само цитируемое сообщение и подставить его дату/время.
     var replyBlock = DOM_CONF.replyBlockSelector
       ? block.querySelector(DOM_CONF.replyBlockSelector)
       : block.querySelector('.link button.mark');
@@ -1682,9 +1518,6 @@
     var replyAuthor = '';
 
     if (replyBlock) {
-      // Цитата - это ПРЯМОЙ span.text внутри кнопки (не вложенный в author).
-      // querySelector не принимает селектор '> .text' (это вызывало DOMException
-      // и убивало цикл), поэтому перебираем прямых потомков вручную.
       var kids = replyBlock.children;
       for (var ki = 0; ki < kids.length; ki++) {
         var kid = kids[ki];
@@ -1733,9 +1566,6 @@
     return totalHours + ' ч.';
   }
 
-  // ------------------------------------------------------------------
-  // Меню выбора провайдера и типа резюме (как в VK-версии)
-  // ------------------------------------------------------------------
   function showPromptMenu(messagesText, count, periodText) {
     removeElement('maxair-prompt-menu');
 
@@ -1995,9 +1825,6 @@
     });
   }
 
-  // ------------------------------------------------------------------
-  // AI-логика (без изменений, перенесена с VK-версии)
-  // ------------------------------------------------------------------
   function autoSummarize(
     messagesText,
     count,
@@ -2556,9 +2383,6 @@
     resolve(content.trim());
   }
 
-  // ------------------------------------------------------------------
-  // Окно результата (как в VK-версии)
-  // ------------------------------------------------------------------
   function showResult(
     text,
     messagesText,
@@ -2818,9 +2642,6 @@
     document.addEventListener('keydown', onResultEscape);
   }
 
-  // ------------------------------------------------------------------
-  // Утилиты UI и копирования (как в VK-версии)
-  // ------------------------------------------------------------------
   function makeButton(text, color, icon, noMargin) {
     var button = document.createElement('button');
     var label = document.createElement('span');
@@ -2993,15 +2814,6 @@
     }
   }
 
-  // ------------------------------------------------------------------
-  // Помощник для настройки DOM-селекторов
-  // ------------------------------------------------------------------
-  // Запустите в консоли браузера на открытой беседе web.max.ru:
-  //   window.__maxAirInspect()
-  // Он выведет структуру видимого списка сообщений и короткие примеры
-  // селекторов, которые нужно вписать в DOM_CONF в начале скрипта.
-  // Возвращает строковое описание элемента (тег, id, класс, размеры,
-  // значения overflow) для отладки селекторов.
   function describeEl(el, indent) {
     if (!el) {
       return null;
@@ -3035,7 +2847,6 @@
       (text ? ' | text="' + text.slice(0, 60) + '"' : '');
   }
 
-  // Строит скелет DOM-дерева (атрибуты + текст) до заданной глубины
   function treeDump(el, depth, maxDepth) {
     var lines = [];
 
@@ -3081,7 +2892,6 @@
       out.openedChatTree = treeDump(openedChat, 0, 6);
     }
 
-    // Детали всех прокручиваемых списков (sidebar vs сообщения)
     var scrollLists = Array.prototype.slice.call(
       document.querySelectorAll('.scrollListScrollable')
     );
@@ -3097,7 +2907,6 @@
       };
     });
 
-    // Структура строк сообщений из найденного контейнера прокрутки
     if (scroller) {
       out.scroller = {
         tag: scroller.tagName.toLowerCase(),
@@ -3121,7 +2930,6 @@
         out.firstBlockHtml = firstBlock.outerHTML.slice(0, 2500);
       }
 
-      // Сводка: имена/времена/тексты в первых элементах
       var timeMarkers = scroller.querySelectorAll('[aria-label="time"], [title]');
       var timeSamples = [];
       Array.prototype.slice.call(timeMarkers).slice(0, 8).forEach(function(t) {
@@ -3141,3 +2949,4 @@
     return out;
   };
 })();
+
