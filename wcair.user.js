@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WCAIR - Web Chat AI Resumer
 // @namespace    chat-resume
-// @version      2.14.4
+// @version      2.14.5
 // @description  Экспорт сообщений из чатов MAX/VK и резюме через ИИ
 // @match        https://web.max.ru/*
 // @match        https://vk.ru/*
@@ -2257,7 +2257,7 @@
           'Authorization': 'Bearer ' + apiKey
         };
 
-        if (provider === 'openrouter') {
+        if (provider.indexOf('openrouter') === 0) {
           headers['HTTP-Referer'] = 'https://web.max.ru';
           headers['X-Title'] = 'MAX AI-resumer';
         }
